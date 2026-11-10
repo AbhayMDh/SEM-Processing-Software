@@ -86,3 +86,30 @@ The script creates the project folder `SEM Processing Software`, writes the appl
 - Yan and colleagues frame photo adjustment as learning an edit from examples and use image descriptors that capture local context. This editor adapts that learning objective to operator-approved SEM slider values using a random forest. [Automatic Photo Adjustment Using Deep Neural Networks](https://arxiv.org/abs/1412.7725v2)
 - Li and colleagues study differing behavior in under- and over-exposed image regions using learned color features. Their work gives context for examining regional variation in addition to a global histogram. Here the regional descriptors measure grayscale intensity variance. [Color Shift Estimation-and-Correction for Image Enhancement](https://arxiv.org/abs/2405.17725v1)
 - Van der Walt and colleagues describe scientific image processing with Python arrays. This editor uses NumPy for grayscale matrices and OpenCV for image operations. [scikit-image: image processing in Python](https://doi.org/10.7717/peerj.453)
+
+
+##Instructions to use
+Start by adjusting one image manually. Open TIFF → adjust the sliders → Log Good Image teaches the software what you like. Save TIFF As saves the image you see. You can do either or both.
+1. Open a micrograph
+If the editor is closed, launch it from Terminal:
+cd "$HOME/Documents/SEM Processing Software" && .venv/bin/python sem_editor.py
+Click Open TIFF and choose a single-page, 8-bit grayscale or 24-bit RGB TIFF. The editor displays RGB images in grayscale. If your microscope produces 16-bit TIFFs or image stacks, export an 8-bit, single-frame working copy first and keep the original acquisition file.
+2. Adjust the image
+Use the mouse wheel to zoom in on a feature you recognize, such as a particle edge. Click and drag to pan. For your first image, start with Gamma and leave the other sliders at their defaults until you need them.
+If the image looks…	Try this
+Too dark or too bright	Under Tone, move Gamma × 100 above 100 to brighten midtones or below 100 to darken them.
+Washed out	Raise Black point slightly or lower White point. Watch the darkest and brightest areas as you move the sliders. Stop while you can still distinguish detail in both.
+Flat in just part of the image	Under Local contrast, try CLAHE clip × 10 at 20. That represents a clip limit of 2.0. Check whether it brings out texture or mainly amplifies noise.
+Speckled with isolated bright or dark pixels	Under Denoise, try Median radius at 1. Inspect your smallest features to see whether they survive the filter.
+Grainy across otherwise smooth areas	Try a few Diffusion iterations. Start with the default Diffusion threshold and inspect a nearby edge as you increase the iterations.
+Slightly soft at the edges	Under Sharpen, raise Unsharp amount (%) gradually. Back it down if bright outlines appear around particles.
+
+
+While you drag a slider, large images can show a draft preview. Release the slider and wait for “Full resolution” before judging fine detail. Fit shows the whole image. Reset returns every slider to its starting value.
+3. Save the image or teach the model
+- Save TIFF As exports a full-resolution grayscale TIFF. Choose a new name such as sample_01_adjusted.tif. Keep the acquisition TIFF for measurements and microscope metadata.
+- Log Good Image records the original image’s brightness and texture measurements alongside your current slider values. Click it once when you’re satisfied. If you launched from the folder above, the examples are stored in Documents/SEM Processing Software/sem_ml_dataset.csv.
+4. Try Auto-Adjust
+Manually adjust and log five different representative micrographs. Then open a sixth image and click Auto-Adjust in the right sidebar. The model moves all ten sliders to suggested settings. Zoom in, inspect the result, and fine-tune it if needed. Click Log Good Image if you want the final settings to become another training example, and Save TIFF As if you want an exported copy.
+
+Five logged examples unlock the button’s prediction workflow. To improve its suggestions, log a variety of images that resemble the specimens and acquisition conditions you actually work with.
