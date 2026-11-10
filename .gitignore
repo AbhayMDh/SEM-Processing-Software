@@ -2,7 +2,7 @@
 venv/
 __pycache__/
 *.py[cod]
-sem_ml_dataset.csv*
+sem_ml_dataset.csv.lock
 .sem_ml_dataset*
 *.tif
 *.tiff

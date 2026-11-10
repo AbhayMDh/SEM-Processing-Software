@@ -2,6 +2,7 @@
 import csv
 import os
 import sys
+import subprocess
 import tempfile
 from contextlib import contextmanager
 from pathlib import Path
@@ -153,6 +154,40 @@ def predict_settings(features):
     estimates = low + forest.predict(features.reshape(1, -1))[0] * (high - low)
     coords = np.clip(np.floor(estimates + 0.5), low, high).astype(int)
     return dict(zip(SLIDERS, map(int, coords)))
+
+
+
+def sync_training_data():
+    """Commit only the dataset and push normally; preserve local data on failure."""
+    try:
+        with _dataset_lock():
+            if not DATASET.is_file():
+                return "Log a good image first to create the training CSV."
+            directory = DATASET.resolve().parent
+            env = dict(os.environ, GIT_TERMINAL_PROMPT="0", GCM_INTERACTIVE="never")
+
+            def git(*args):
+                result = subprocess.run(
+                    ["git", "-C", str(directory), *args],
+                    capture_output=True, text=True, timeout=60, env=env,
+                )
+                if result.returncode:
+                    detail = result.stderr.strip() or result.stdout.strip()
+                    raise ValueError(detail or "Git command failed.")
+                return result.stdout.strip()
+
+            git("rev-parse", "--show-toplevel")
+            branch = git("symbolic-ref", "--quiet", "--short", "HEAD")
+            git("remote", "get-url", "origin")
+            # Retry also pushes an earlier local commit after an offline failure.
+            git("add", "--", DATASET.name)
+            if git("diff", "--cached", "--name-only", "--", DATASET.name):
+                git("commit", "--only", "-m", "Record approved SEM training examples",
+                    "--", DATASET.name)
+            git("push", "origin", f"HEAD:refs/heads/{branch}")
+        return ""
+    except (OSError, ValueError, subprocess.SubprocessError) as exc:
+        return f"Saved locally; GitHub sync pending. {exc}"
 
 
 def read_tiff(path):
@@ -370,6 +405,15 @@ class Dashboard(QtWidgets.QMainWindow):
         self.auto_button.clicked.connect(lambda: self.learn(True))
         controls.addWidget(self.log_button)
         controls.addWidget(self.auto_button)
+        self.sync_button = QtWidgets.QPushButton("Sync Training Data")
+        self.sync_button.clicked.connect(self.sync_dataset)
+        controls.addWidget(self.sync_button)
+        self.sync_status = QtWidgets.QLabel(
+            "Good-image examples are saved locally and pushed to GitHub.")
+        self.sync_status.setWordWrap(True)
+        self.sync_status.setTextInteractionFlags(
+            QtCore.Qt.TextInteractionFlag.TextSelectableByMouse)
+        controls.addWidget(self.sync_status)
         controls.addStretch()
         split.addWidget(hub)
         split.setChildrenCollapsible(False)
@@ -393,6 +437,7 @@ class Dashboard(QtWidgets.QMainWindow):
         self.save_action.setEnabled(current)
         self.log_button.setEnabled(current)
         self.auto_button.setEnabled(ready)
+        self.sync_button.setEnabled(not self.busy and DATASET.is_file())
 
     def start(self, function, done):
         job = Job(function)
@@ -525,16 +570,28 @@ class Dashboard(QtWidgets.QMainWindow):
             features = extract_features(raw)
             if predict:
                 return predict_settings(features)
-            return log_sample(features, settings)
+            count = log_sample(features, settings)
+            return count, sync_training_data()
 
         def complete(result):
             if predict:
                 self.apply_settings(result)
             else:
-                self.statusBar().showMessage("Approved settings appended to sem_ml_dataset.csv.")
+                count, error = result
+                self.sync_status.setText(error or f"{count} examples saved and pushed to GitHub.")
+                self.statusBar().showMessage(
+                    "Saved locally; sync pending." if error else "Training CSV pushed to GitHub.")
 
-        message = "Learning adjustments…" if predict else "Logging approved settings…"
+        message = "Learning adjustments…" if predict else "Saving and syncing approved settings…"
         self.exclusive(message, compute, complete)
+
+    def sync_dataset(self):
+        def complete(error):
+            self.sync_status.setText(error or "Training CSV pushed to GitHub.")
+            self.statusBar().showMessage(
+                "Saved locally; sync pending." if error else "Training CSV pushed to GitHub.")
+
+        self.exclusive("Syncing training CSV…", sync_training_data, complete)
 
     def closeEvent(self, event):
         if self.busy:

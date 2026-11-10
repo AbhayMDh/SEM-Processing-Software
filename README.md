@@ -31,7 +31,7 @@ Launch from the same working directory each session to use the same training log
 
 1. **Open a TIFF.** Select **Open TIFF** and choose a single-page, 8-bit-per-channel grayscale, RGB or RGBA micrograph. The editor converts 24-bit RGB pixels to one 8-bit grayscale intensity per pixel. Grayscale pixels retain their original values. For 16-bit acquisitions or stacks, first export an 8-bit single-frame working copy from the acquisition software.
 2. **Inspect a feature.** Scroll over the viewport to zoom. Drag the image to pan, or select **Fit** to see the entire frame. Compare fine edges and even-textured areas while tuning the sliders in the collapsible left panel. While a slider is being dragged, large frames use a draft preview. Release the slider and wait for **Full resolution** to inspect fine structures. **Reset** restores the neutral rendering.
-3. **Approve the rendering.** Once satisfied, select **Log Good Image** in the ML Control Hub. Each approval adds a row to `sem_ml_dataset.csv` in the working directory. Logging settings and exporting a processed image are separate actions.
+3. **Approve the rendering.** Once satisfied, select **Log Good Image** in the ML Control Hub. Each approval adds a row to `sem_ml_dataset.csv` in the working directory, then commits and pushes the CSV to the current branch on GitHub in the background. Logging settings and exporting a processed image are separate actions.
 4. **Build a training set.** Repeat with several source images. Include examples with different brightness, noise and local contrast representative of the specimens you expect to process. Five approved rows unlock prediction.
 5. **Run Auto-Adjust.** Open another micrograph and select **Auto-Adjust**. The editor learns from the current log and moves the sliders to its suggested settings. Inspect the preview, refine individual settings and log the result if you approve it.
 6. **Export a copy.** Choose **Save TIFF As** to export the full-resolution, single-channel image as a separate TIFF. The export contains processed pixels and omits acquisition metadata. Keep the acquisition TIFF for intensity measurements and its instrument metadata.
@@ -56,6 +56,14 @@ The feature extractor describes the **unadjusted grayscale image** with 273 numb
 Columns `hist_000` through `hist_255`, `laplacian_variance`, and `variance_r0_c0` through `variance_r3_c3` hold the source descriptors. Columns beginning with `slider_` hold integer control coordinates. Each CSV row pairs that vector with the approved slider coordinates. Auto-Adjust fits a 96-tree multi-output random forest that predicts all coordinates together. Targets are scaled by their slider ranges during fitting and mapped back to valid controls for display. The five-row threshold permits a first prediction. Its accuracy depends on how well the logged images and operator choices represent the new field of view.
 
 If Auto-Adjust reports too few examples, approve more images in the current working directory. If previously recorded examples seem missing, check which directory you launched from.
+
+## Training data on GitHub
+
+**Log Good Image** saves each example locally before attempting a Git commit and push. The ML hub reports the result. If the network, authentication or a Git conflict prevents a push, your examples remain on disk and training continues to use them. Click **Sync Training Data** to retry without logging a duplicate example. The next approval also retries any pending local commits.
+
+Launch from your cloned project directory, with Git installed and authenticated for the `origin` remote. Set your Git author name and email before the first commit. Automatic commits include only `sem_ml_dataset.csv`. The lock file remains ignored. With a public repository, the CSV's image-derived measurements and approved slider values are publicly accessible. Image files remain ignored.
+
+If a push reports that the remote branch has newer commits, reconcile those changes using Git and click **Sync Training Data** again. The editor uses a normal push and preserves local history on failure.
 
 ## Publish the repository
 
